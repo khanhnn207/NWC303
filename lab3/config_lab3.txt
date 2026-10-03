@@ -1,0 +1,287 @@
+
+
+!################ S0 (Room 1) ################
+en
+conf t
+host S0
+vlan 10
+name Staff2
+vlan 20
+name HR
+exit
+int range f0/3-9
+sw mode access
+sw access vlan 10
+int range f0/10-19
+sw mode access
+sw access vlan 20
+int range f0/1-2
+channel-group 1 mode desirable
+exit
+int port-channel 1
+sw mode trunk
+sw trunk allowed vlan 10,20
+end
+copy running-config startup-config
+
+
+!################ S1 (Room 2) ################
+en
+conf t
+host S1
+vlan 10
+name Staff2
+vlan 20
+name HR
+exit
+int range f0/3-9
+sw mode access
+sw access vlan 10
+int range f0/10-19
+sw mode access
+sw access vlan 20
+int range f0/1-2
+channel-group 2 mode active
+exit
+int port-channel 2
+sw mode trunk
+sw trunk allowed vlan 10,20
+end
+copy running-config startup-config
+
+
+!################ S2 (Room 3) ################
+en
+conf t
+host S2
+vlan 30
+name Student2
+vlan 40
+name Exam-online
+exit
+int range f0/3-9
+sw mode access
+sw access vlan 30
+int range f0/10-19
+sw mode access
+sw access vlan 40
+int range f0/1-2
+channel-group 1 mode active
+exit
+int port-channel 1
+sw mode trunk
+sw trunk allowed vlan 30,40
+end
+copy running-config startup-config
+
+
+!################ S3 (Room 4) ################
+en
+conf t
+host S3
+vlan 30
+name Student2
+vlan 40
+name Exam-online
+exit
+int range f0/3-9
+sw mode access
+sw access vlan 30
+int range f0/10-19
+sw mode access
+sw access vlan 40
+int range f0/1-2
+channel-group 2 mode desirable
+exit
+int port-channel 2
+sw mode trunk
+sw trunk allowed vlan 30,40
+end
+copy running-config startup-config
+
+
+!################ DC1 (Multilayer switch) ################
+en
+conf t
+host DC1
+ip routing
+vlan 10
+name Staff2
+vlan 20
+name HR
+exit
+
+! EtherChannel 1 (PAgP) -> S0
+int range f0/1-2
+sw trunk encapsulation dot1q
+sw mode trunk
+channel-group 1 mode desirable
+exit
+int port-channel 1
+sw trunk encapsulation dot1q
+sw mode trunk
+sw trunk allowed vlan 10,20
+
+! EtherChannel 2 (LACP) -> S1
+int range f0/3-4
+sw trunk encapsulation dot1q
+sw mode trunk
+channel-group 2 mode active
+exit
+int port-channel 2
+sw trunk encapsulation dot1q
+sw mode trunk
+sw trunk allowed vlan 10,20
+
+! Gateway cho VLAN (DHCP Server nam o Room 1 - 192.168.149.2)
+int vlan 10
+ip add 192.168.149.1 255.255.255.128
+ip helper-address 192.168.149.2
+no shut
+int vlan 20
+ip add 192.168.59.1 255.255.255.192
+ip helper-address 192.168.149.2
+no shut
+
+! Link 1 -> R1
+int g0/1
+no switchport
+ip add 100.0.223.1 255.255.255.252
+no shut
+exit
+ip route 0.0.0.0 0.0.0.0 100.0.223.2
+end
+copy running-config startup-config
+
+
+!################ DC2 (Multilayer switch + DHCP) ################
+en
+conf t
+host DC2
+ip routing
+vlan 30
+name Student2
+vlan 40
+name Exam-online
+exit
+
+! EtherChannel 1 (LACP) -> S2
+int range f0/1-2
+sw trunk encapsulation dot1q
+sw mode trunk
+channel-group 1 mode active
+exit
+int port-channel 1
+sw trunk encapsulation dot1q
+sw mode trunk
+sw trunk allowed vlan 30,40
+
+! EtherChannel 2 (PAgP) -> S3
+int range f0/3-4
+sw trunk encapsulation dot1q
+sw mode trunk
+channel-group 2 mode desirable
+exit
+int port-channel 2
+sw trunk encapsulation dot1q
+sw mode trunk
+sw trunk allowed vlan 30,40
+
+! Gateway cho VLAN
+int vlan 30
+ip add 192.168.24.1 255.255.255.224
+no shut
+int vlan 40
+ip add 192.168.245.1 255.255.255.240
+no shut
+
+! Link 4 -> R2
+int g0/1
+no switchport
+ip add 100.0.42.1 255.255.255.252
+no shut
+exit
+ip route 0.0.0.0 0.0.0.0 100.0.42.2
+
+! DHCP pools cho Room 3 va Room 4
+ip dhcp excluded-address 192.168.24.1
+ip dhcp excluded-address 192.168.245.1
+ip dhcp pool VLAN30
+network 192.168.24.0 255.255.255.224
+default-router 192.168.24.1
+dns-server 100.0.114.2
+ip dhcp pool VLAN40
+network 192.168.245.0 255.255.255.240
+default-router 192.168.245.1
+dns-server 100.0.114.2
+end
+copy running-config startup-config
+
+
+!################ R1 (ben DC1) ################
+en
+conf t
+host G1
+int g0/0
+ip add 100.0.223.2 255.255.255.252
+no shut
+int g0/1/0
+ip add 100.0.210.1 255.255.255.252
+no shut
+exit
+ip route 192.168.149.0 255.255.255.128 100.0.223.1
+ip route 192.168.59.0 255.255.255.192 100.0.223.1
+ip route 0.0.0.0 0.0.0.0 100.0.210.2
+end
+copy running-config startup-config
+
+
+!################ R2 (ben DC2) ################
+en
+conf t
+host G2
+int g0/2
+ip add 100.0.42.2 255.255.255.252
+no shut
+int g0/0/0
+ip add 100.0.157.2 255.255.255.252
+no shut
+exit
+ip route 192.168.24.0 255.255.255.224 100.0.42.1
+ip route 192.168.245.0 255.255.255.240 100.0.42.1
+ip route 0.0.0.0 0.0.0.0 100.0.157.1
+end
+copy running-config startup-config
+
+
+!################ ISP ################
+en
+conf t
+host ISP
+int g0/0/0
+ip add 100.0.210.2 255.255.255.252
+no shut
+int g0/1/0
+ip add 100.0.157.1 255.255.255.252
+no shut
+int g0/0
+ip add 100.0.114.1 255.255.255.192
+no shut
+exit
+ip route 192.168.149.0 255.255.255.128 100.0.210.1
+ip route 192.168.59.0 255.255.255.192 100.0.210.1
+ip route 192.168.24.0 255.255.255.224 100.0.157.2
+ip route 192.168.245.0 255.255.255.240 100.0.157.2
+end
+copy running-config startup-config
+
+
+!################ CAU HINH TREN SERVER (GUI) ################
+! DHCP Server (Room 1):
+!   IP 192.168.149.2 / 255.255.255.128, Gateway 192.168.149.1
+!   Services > DHCP > On, tao 2 pool:
+!     Pool VLAN10: Gateway 192.168.149.1, DNS 100.0.114.2, Start 192.168.149.0, Mask 255.255.255.128
+!     Pool VLAN20: Gateway 192.168.59.1,  DNS 100.0.114.2, Start 192.168.59.0,  Mask 255.255.255.192
+! Internet Zone (Mask 255.255.255.192, Gateway 100.0.114.1):
+!   DNS 100.0.114.2 | Mail 100.0.114.3 | fpt.edu.vn 100.0.114.4
+!   DNS server: them ban ghi A  fpt.edu.vn -> 100.0.114.4
